@@ -33,7 +33,7 @@ const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "[::1]"]);
  * In both cases the browser fails the request with the same opaque TypeError
  * a sleeping Render instance produces, so without this check the console
  * showed "Waking the backend up..." for two minutes when the real problem was
- * that NEXT_PUBLIC_API_URL was never set on Vercel (it defaults to
+ * that NEXT_PUBLIC_API_URL was never set on the hosted frontend (it defaults to
  * http://localhost:8000).
  *
  * @returns {string|null} why the URL is unusable, or null if it looks fine

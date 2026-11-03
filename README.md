@@ -146,6 +146,30 @@ alembic upgrade head
 
 See `docs/judging-readiness.md` for the scoring-focused implementation notes and `docs/security.md` for the production security checklist. GitHub Actions CI is included in `.github/workflows/ci.yml`.
 
+## Deploy on Render
+
+Both halves run on Render, described by the Blueprint in `render.yaml`:
+
+| Service | Render type | URL |
+| --- | --- | --- |
+| `agent-helper-api` | Docker web service (`backend/Dockerfile`) | `https://agent-helper-api.onrender.com` |
+| `agent-helper-web` | Node web service (`next build` / `next start`) | `https://agent-helper-web.onrender.com` |
+| `agent-helper-db` | Render Postgres | internal URL wired into `POSTGRES_URL` |
+
+The API runs migrations on startup. Without a Gemini key it uses the
+deterministic agents, without Qdrant it uses the in-process memory fallback,
+and with `BACKEND_AUTH_MODE=optional` and no Clerk keys it accepts anonymous
+requests, so the stack works before any secrets exist. To turn the optional
+pieces on, set in the Render dashboard:
+
+- API: `GEMINI_API_KEY`; `QDRANT_URL`, `QDRANT_API_KEY`, `QDRANT_ENABLED=true`;
+  `CLERK_ISSUER_URL`, `CLERK_SECRET_KEY`, then `BACKEND_AUTH_MODE=strict`.
+- Web: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`. `NEXT_PUBLIC_*`
+  values are baked in at build time, so redeploy the web service after changing them.
+
+Free Render services sleep when idle; the console shows a "waking the backend"
+banner for the first request after a sleep.
+
 Frontend dependencies are locked with pnpm. For local frontend-only checks:
 
 ```bash

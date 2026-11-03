@@ -1,7 +1,29 @@
+# Render Blueprint: the whole stack (API, web console, Postgres) on Render.
+#
+# Public URLs (Render derives them from the service names):
+#   web console  https://agent-helper-web.onrender.com
+#   API          https://agent-helper-api.onrender.com
+#
+# If Render appends a suffix to either name (because it is taken), update
+# NEXT_PUBLIC_API_URL / NEXT_PUBLIC_WS_URL on the web service and
+# BACKEND_CORS_ORIGINS / CLERK_AUTHORIZED_PARTIES on the API to match.
+# NEXT_PUBLIC_* values are inlined at build time, so the web service must be
+# redeployed after changing them.
+
+databases:
+  - name: agent-helper-db
+    plan: free
+    region: oregon
+    postgresMajorVersion: "16"
+    databaseName: agent_helper_db
+    user: agent_helper_db_user
+
 services:
   - type: web
     name: agent-helper-api
-    env: docker
+    runtime: docker
+    plan: free
+    region: oregon
     rootDir: backend
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
@@ -11,26 +33,38 @@ services:
         value: "prod"
       - key: LOG_LEVEL
         value: "INFO"
+      # "auto" uses Gemini when GEMINI_API_KEY/GOOGLE_API_KEY is set and the
+      # deterministic agents otherwise, so the API works before a key exists.
       - key: AGENT_RUNTIME
-        value: "gemini"
+        value: "auto"
       - key: AUTO_CREATE_TABLES
         value: "false"
       - key: RUN_MIGRATIONS_ON_STARTUP
         value: "true"
+      - key: POSTGRES_URL
+        fromDatabase:
+          name: agent-helper-db
+          property: connectionString
+      # Switch to "strict" once CLERK_ISSUER_URL / CLERK_SECRET_KEY are set
+      # here and the Clerk keys are set on agent-helper-web.
       - key: BACKEND_AUTH_MODE
-        value: "strict"
+        value: "optional"
       - key: BACKEND_CORS_ORIGINS
-        value: "https://agent-helper-sable.vercel.app"
+        value: "https://agent-helper-web.onrender.com,http://localhost:3000"
       - key: CLERK_AUTHORIZED_PARTIES
-        value: "https://agent-helper-sable.vercel.app"
+        value: "https://agent-helper-web.onrender.com,http://localhost:3000"
       - key: CLERK_ISSUER_URL
         sync: false
       - key: CLERK_SECRET_KEY
         sync: false
       - key: JWT_SECRET
         generateValue: true
-      - key: POSTGRES_URL
-        sync: false
+      - key: PROMPT_EDITING_ENABLED
+        value: "false"
+      # Long-term memory uses the in-process fallback until a Qdrant cluster
+      # is configured: set QDRANT_URL/QDRANT_API_KEY and QDRANT_ENABLED=true.
+      - key: QDRANT_ENABLED
+        value: "false"
       - key: QDRANT_URL
         sync: false
       - key: QDRANT_API_KEY
@@ -39,3 +73,35 @@ services:
         sync: false
       - key: GOOGLE_API_KEY
         sync: false
+
+  - type: web
+    name: agent-helper-web
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: frontend
+    buildCommand: npx --yes pnpm@10.13.1 install --frozen-lockfile && npx --yes pnpm@10.13.1 build
+    startCommand: ./node_modules/.bin/next start -H 0.0.0.0 -p $PORT
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NEXT_TELEMETRY_DISABLED
+        value: "1"
+      - key: NEXT_PUBLIC_API_URL
+        value: "https://agent-helper-api.onrender.com"
+      - key: NEXT_PUBLIC_WS_URL
+        value: "wss://agent-helper-api.onrender.com"
+      # Leave both Clerk keys unset to run without sign-in.
+      - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: NEXT_PUBLIC_CLERK_SIGN_IN_URL
+        value: "/sign-in"
+      - key: NEXT_PUBLIC_CLERK_SIGN_UP_URL
+        value: "/sign-up"
+      - key: NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL
+        value: "/dashboard"
+      - key: NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL
+        value: "/dashboard"

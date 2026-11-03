@@ -112,7 +112,7 @@ class Settings(BaseSettings):
             "http://127.0.0.1:3000",
             "http://localhost:3001",
             "http://127.0.0.1:3001",
-            "https://agent-helper-sable.vercel.app",
+            "https://agent-helper-web.onrender.com",
         ]
     )
 
